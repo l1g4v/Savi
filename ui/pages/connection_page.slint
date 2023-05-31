@@ -1,0 +1,45 @@
+// SPDX-FileCopyrightText: Copyright 2023 Savi
+// SPDX-License-Identifier: GPL-3.0-only 
+
+import { Button, GroupBox, SpinBox, ComboBox, CheckBox, LineEdit, TabWidget, VerticalBox, HorizontalBox, Slider, SpinBox } from "std-widgets.slint";
+import { Page } from "page.slint";
+import { PeersComponent } from "../components/components.slint";
+import { SelfPeer } from "../globals.slint";
+export component ConnectionPage inherits Page{
+    title: "Connection";
+    description: "This page shows the network connection status and allows to change the connection settings.";
+
+    GroupBox{
+        vertical-stretch: 0;
+        title: "Connection settings";
+        
+        VerticalLayout{
+            spacing: 8px;
+            HorizontalLayout{
+                spacing: 8px;
+                LineEdit{
+                    placeholder-text: "Username";
+                    edited(x) => {
+                        SelfPeer.name = x;
+                    }
+                }
+                
+                Button{
+                    text: "Create";
+                }
+                Button{
+                    text: "Anwser";
+                }
+            }
+
+            LineEdit{
+                placeholder-text: "Offer b64 encoded SDP";
+            }
+            LineEdit{
+                placeholder-text: "Answer b64 encoded SDP";
+            }
+        }
+    }
+    PeersComponent{}
+    
+}

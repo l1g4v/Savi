@@ -1,0 +1,25 @@
+// SPDX-FileCopyrightText: Copyright 2023 Savi
+// SPDX-License-Identifier: GPL-3.0-only 
+
+// used by the gui to display the peers
+export struct Peer{
+    id: int,
+    name: string,
+    ip: string,
+}
+
+export global SelfPeer{
+    in property <string> name;
+    in property <string> public-ip: "127.0.0.1";
+}
+
+export global PeerList{
+    callback drop(int);
+    callback change-volume(int, int);
+    callback mute-peer(int, bool);
+
+    in property <[Peer]> peers: [
+        {id: 0, name: "Dummy", ip: "localhost" },
+        {id: 1, name: "Dummy", ip: "127.0.0.1"},
+    ];
+}

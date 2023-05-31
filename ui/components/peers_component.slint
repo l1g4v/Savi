@@ -1,0 +1,39 @@
+// SPDX-FileCopyrightText: Copyright 2023 Savi
+// SPDX-License-Identifier: GPL-3.0-only 
+
+import { Button, GroupBox, SpinBox, ComboBox, CheckBox, LineEdit, TabWidget, VerticalBox, HorizontalBox, Slider, SpinBox } from "std-widgets.slint";
+
+import { PeerComponent } from "peer_component.slint";
+import { PeerList, SelfPeer } from "../globals.slint";
+
+export component PeersComponent inherits GroupBox{
+    vertical-stretch: 0;
+    title: "Peers";
+
+    VerticalLayout{
+        spacing: 8px;
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: stretch;
+            Text {
+                text: SelfPeer.name + " (You)";
+            }
+            Text {
+                text: SelfPeer.public_ip;
+            }
+        }
+        for peer[idx] in PeerList.peers: PeerComponent{
+            data: peer;
+            drop(id) => {
+                PeerList.drop(id);
+            }
+            change-volume(id, volume) => {
+                PeerList.change-volume(id, volume);
+            }
+            mute-peer(id, status) => {
+                PeerList.mute-peer(id, status);
+            }
+        }
+    }
+    
+}

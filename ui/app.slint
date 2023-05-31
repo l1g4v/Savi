@@ -1,0 +1,27 @@
+// SPDX-FileCopyrightText: Copyright 2023 Savi
+// SPDX-License-Identifier: GPL-3.0-only 
+
+import { CheckBox, StandardListView, StyleMetrics } from "std-widgets.slint";
+import { AboutPage, ConnectionPage, SettingsPage } from "./ui/pages/pages.slint";
+import { SideBar } from "./ui/side_bar.slint";
+
+import { PeerList } from "globals.slint";
+export { PeerList }
+
+export component App inherits Window {
+    preferred-width: 700px;
+    preferred-height: 300px;
+    title: "Savi p2p";
+
+    HorizontalLayout {  
+        side-bar := SideBar {  
+            title: "Savi";
+            model: ["Connection", "Settings", "About"];
+        }
+
+        if(side-bar.current-item == 0) : ConnectionPage {}
+        if(side-bar.current-item == 1) : SettingsPage {}
+        if(side-bar.current-item == 2) : AboutPage {}
+
+    }
+}

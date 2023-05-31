@@ -1,0 +1,73 @@
+
+// SPDX-FileCopyrightText: Copyright 2023 Savi
+// SPDX-License-Identifier: GPL-3.0-only 
+
+import { Button, GroupBox, SpinBox, ComboBox, CheckBox, LineEdit, TabWidget, VerticalBox, HorizontalBox, Slider, SpinBox } from "std-widgets.slint";
+import { Peer } from "../globals.slint";
+component Muter inherits Image{
+    callback toggled;
+    in-out property <bool> checked;
+    in-out property<bool> enabled <=> touch-area.enabled;
+    width: 20px;
+    source: self.checked ? @image-url("../icons/mute.svg") : @image-url("../icons/volume.svg");
+    touch-area := TouchArea {
+        width: root.width;
+        height: root.height;
+        clicked => {
+            if (root.enabled) {
+                root.checked = !root.checked;
+                root.toggled();
+            }
+        }
+    }
+}
+
+component Drop inherits Image{
+    callback clicked;
+    in-out property<bool> enabled <=> touch-area.enabled;
+    width: 20px;
+    source: @image-url("../icons/close.svg");
+    touch-area := TouchArea {
+        width: root.width;
+        height: root.height;
+        clicked => {
+            if (root.enabled) {
+                root.clicked();
+            }
+        }
+    }
+}
+
+export component PeerComponent inherits HorizontalLayout{
+    callback drop(int);
+    callback change-volume(int,int);
+    callback mute-peer(int,bool);
+
+    in property<Peer> data;
+
+    spacing: 8px;
+    Text{
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        text: root.data.name + " (" + root.data.id + ")";
+    }
+    Muter{
+        toggled => {
+            root.mute-peer(root.data.id,self.checked);
+        }
+    }
+    Slider {
+        min-width: 100px;
+        minimum: 0;
+        maximum: 100;
+        value: 100;
+        changed(x) => {
+            root.change-volume(root.data.id,x);
+        }
+    }
+    Drop{
+        clicked => {
+            root.drop(root.data.id);
+        }
+    }
+}

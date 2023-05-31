@@ -1,2 +1,3 @@
 # Savi
-Lightweight p2p voice and video call app
+
+A simple p2p voice call app made in Rust with Slint
