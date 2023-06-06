@@ -5,7 +5,7 @@ use slint::Model;
 use std::rc::Rc;
 use tokio::runtime::Runtime;
 mod aes;
-
+mod signaling_client;
 slint::include_modules!();
 
 
