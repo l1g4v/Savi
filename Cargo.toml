@@ -8,7 +8,13 @@ build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+aes-gcm-siv = "0.11.1"
+aead = "0.5.2"
+base64 = "0.21.2"
+
 slint = "1.0.2"
+
+tokio = {version="*", features=["full"] }
 
 [build-dependencies]
 slint-build = "1.0.2"

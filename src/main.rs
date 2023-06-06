@@ -3,6 +3,8 @@
 
 use slint::Model;
 use std::rc::Rc;
+use tokio::runtime::Runtime;
+mod aes;
 
 slint::include_modules!();
 
@@ -21,7 +23,8 @@ impl PeerListData {
     }
 }
 
-pub fn main() {
+
+fn main() {
     let app = App::new().unwrap();
 
     app.global::<PeerList>().on_change_volume(move |id, vol| {
