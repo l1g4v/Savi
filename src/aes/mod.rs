@@ -43,7 +43,7 @@ impl AES{
         let ciphertext = &b64_decode[12..b64_decode.len()];
     
         let cipher = Aes256GcmSiv::new(key);
-        let decrypted = cipher.decrypt(&Nonce::from_slice(nonce), ciphertext.as_ref()).unwrap();
+        let decrypted = cipher.decrypt(&Nonce::from_slice(nonce), ciphertext.as_ref()).unwrap_or(vec![0]);
     
         String::from_utf8(decrypted).unwrap()
     }
