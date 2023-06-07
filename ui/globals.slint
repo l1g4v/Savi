@@ -13,7 +13,14 @@ export global SelfPeer{
     in property <string> public-ip: "127.0.0.1";
 }
 
+export global SignalingServer{
+    callback create();
+    in property <string> ip;
+    in property <int> port;
+}
+
 export global PeerList{
+    callback connect(string);
     callback drop(int);
     callback change-volume(int, int);
     callback mute-peer(int, bool);
