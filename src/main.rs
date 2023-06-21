@@ -12,7 +12,8 @@ mod signaling_client;
 mod signaling_server;
 slint::include_modules!();
 
-
+mod audio;
+mod audio_peer;
 struct PeerListData {
     peers: Rc<slint::VecModel<Peer>>,
 }
