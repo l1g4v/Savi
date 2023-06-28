@@ -8,15 +8,30 @@ export struct Peer{
     ip: string,
 }
 
-export global SelfPeer{
-    in property <string> name;
-    in property <string> public-ip: "127.0.0.1";
+export global AudioDevices{
+    in property <[string]> capture_devices;
+    in property <[string]> playback_devices;
+    in-out property  <int> input_intensity;
+    in property <int> input_threshold;
+    in property <bool> on-settings;
+    callback set-capture(int);
+    callback set-playback(string);
+    callback set-bitrate(string);
+    callback in-settings();
 }
 
-export global SignalingServer{
+export global SelfPeer{
+    in property <string> name;
+    in property <string> public-ip: "127.0.0.1 / [::1]";
+}
+
+export global Signaling{
     callback create();
-    in property <string> ip;
-    in property <int> port;
+    callback connect(string, string);
+    in property <string> address;
+    in property <string> key;
+    in property <bool> hosting: false;
+    in property <bool> connected: false;
 }
 
 export global PeerList{

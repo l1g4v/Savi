@@ -4,7 +4,7 @@
 import { Button, GroupBox, SpinBox, ComboBox, CheckBox, LineEdit, TabWidget, VerticalBox, HorizontalBox, Slider, SpinBox } from "std-widgets.slint";
 import { Page } from "page.slint";
 import { PeersComponent } from "../components/components.slint";
-import { SelfPeer, SignalingServer, PeerList } from "../globals.slint";
+import { SelfPeer, Signaling, PeerList } from "../globals.slint";
 export component ConnectionPage inherits Page{
     title: "Connection";
     description: "This page shows the network connection status and allows to change the connection settings.";
@@ -28,25 +28,31 @@ export component ConnectionPage inherits Page{
                 Button{
                     text: "Create";
                     clicked() => {
-                        SignalingServer.create();
+                        Signaling.create();
                     }
                 }
                 Button{
                     text: "Connect";
                     clicked() => {
-                        PeerList.connect(address); 
+                        Signaling.connect(address,password); 
                     }
                 }
             }
             HorizontalLayout {
                 spacing: 8px;
                 LineEdit{
+                    read-only: Signaling.hosting;
+                    enabled: !Signaling.connected;
+                    text: Signaling.address;
                     placeholder-text: "Signaling server address";
                     edited(x) => {
                         root.address = x;
                     }
                 }
                 LineEdit{
+                    read-only: Signaling.hosting;
+                    enabled: !Signaling.connected;
+                    text: Signaling.key;
                     placeholder-text: "Signaling server password";
                     edited(x) => {
                         root.password = x;

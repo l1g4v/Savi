@@ -35,8 +35,12 @@ impl AES{
     }
 
     pub fn decrypt(&self, b64_cipher: String) -> String{
-        let key_decode = &BASE64.decode(&self.key).unwrap();
-        let key = GenericArray::from_slice(key_decode as &[u8]);
+        let key_try = &BASE64.decode(&self.key);
+        if key_try.is_err(){
+            return "".to_string();
+        }
+        let key_decode = key_try.as_ref().unwrap();
+        let key = GenericArray::from_slice(key_decode.as_slice());
     
         let b64_decode = BASE64.decode(b64_cipher).unwrap();
         let nonce = &b64_decode[0..12];
@@ -49,8 +53,12 @@ impl AES{
     }
     
     pub fn encrypt(&self, message: String) -> String{
-        let key_decode = &BASE64.decode(&self.key).unwrap();
-        let key = GenericArray::from_slice(key_decode as &[u8]);
+        let key_try = &BASE64.decode(&self.key);
+        if key_try.is_err(){
+            return "".to_string();
+        }
+        let key_decode = key_try.as_ref().unwrap();
+        let key = GenericArray::from_slice(key_decode.as_slice());
     
         let nonce = &Aes256GcmSiv::generate_nonce(&mut OsRng);
         let cipher = Aes256GcmSiv::new(key);

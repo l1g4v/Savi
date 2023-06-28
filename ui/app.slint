@@ -5,10 +5,11 @@ import { CheckBox, StandardListView, StyleMetrics } from "std-widgets.slint";
 import { AboutPage, ConnectionPage, SettingsPage } from "./ui/pages/pages.slint";
 import { SideBar } from "./ui/side_bar.slint";
 
-import { PeerList } from "globals.slint";
-export { PeerList }
+import { PeerList, Signaling, SelfPeer, AudioDevices } from "globals.slint";
+export { PeerList, Signaling, SelfPeer, AudioDevices }
 
 export component App inherits Window {
+    in-out property  <int> input_intensity;
     preferred-width: 700px;
     preferred-height: 300px;
     title: "Savi p2p";
@@ -17,11 +18,21 @@ export component App inherits Window {
         side-bar := SideBar {  
             title: "Savi";
             model: ["Connection", "Settings", "About"];
+            clicked(idx) => {
+                AudioDevices.on-settings = (side-bar.current-item == 1);
+                if (side-bar.current-item == 1) {
+                    AudioDevices.in-settings();
+                }
+            }
         }
 
         if(side-bar.current-item == 0) : ConnectionPage {}
-        if(side-bar.current-item == 1) : SettingsPage {}
+        if(side-bar.current-item == 1) : SettingsPage {
+            intensity <=> input_intensity;
+        }
         if(side-bar.current-item == 2) : AboutPage {}
+
+
 
     }
 }

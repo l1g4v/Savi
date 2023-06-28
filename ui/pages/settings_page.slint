@@ -3,12 +3,87 @@
 
 import { Button, GroupBox, SpinBox, ComboBox, CheckBox, LineEdit, TabWidget, VerticalBox, HorizontalBox, Slider, SpinBox } from "std-widgets.slint";
 import { Page } from "page.slint";
+import { AudioDevices } from "../globals.slint";
 
 export component SettingsPage inherits Page{
     title: "Settings";
     description: "This page shows the input and output audio devices, and allows the user to change them.";
+    in-out property  <int> intensity;
     GroupBox{
-        
+        vertical-stretch: 0;
+        title: "Voice settings";
+        VerticalLayout{
+            spacing: 8px;
+            HorizontalLayout{
+                spacing: 8px;
+                Text{
+                    text: "Input device:   ";
+                    font-size: 15px;
+                    vertical-alignment: TextVerticalAlignment.center;
+                    horizontal-alignment: TextHorizontalAlignment.center;
+                }
+                ComboBox {
+                    y: 0px;
+                    //width: self.preferred-width;
+                    //height: self.preferred-height;
+                    model: AudioDevices.capture-devices;
+                    current-index: 0;
+                    selected(_) => {
+                        AudioDevices.set-capture(self.current-index);
+                    }
+                }
+            }
+            HorizontalLayout{
+                spacing: 8px;
+                Text{
+                    text: "Output device:";
+                    font-size: 15px;
+                    vertical-alignment: TextVerticalAlignment.center;
+                }
+                ComboBox {
+                    y: 0px;
+                    //width: self.preferred-width;
+                    //height: self.preferred-height;
+                    model: AudioDevices.playback-devices;
+                    current-index: 0;
+                    selected(name) => {
+                        AudioDevices.set-playback(name);
+                    }
+                }
+            }
+        }
+    }
+    GroupBox {
+        vertical-stretch: 0;
+        title: "Input sensitivity";
+        VerticalLayout {
+            spacing: 8px;
+            Slider {
+                maximum: 100;
+                enabled: false;
+                value: AudioDevices.input-intensity;
+            }
+            Slider {
+                maximum: 100;
+                value: 0;
+            }
+        }
+
+    }
+    GroupBox {
+        vertical-stretch: 0;
+        title: "Codec bitrate and related settings";
+        VerticalLayout {
+            spacing: 8px;
+            LineEdit {
+                text: "96000";
+                placeholder-text: "Bitrate";
+                edited(x) => {
+                    AudioDevices.set-bitrate(x);
+                }
+            }
+        }
+
     }
 
 }

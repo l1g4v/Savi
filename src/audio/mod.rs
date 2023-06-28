@@ -1,8 +1,16 @@
-use miniaudio::{Context, DeviceId};
+// SPDX-FileCopyrightText: Copyright 2023 Savi
+// SPDX-License-Identifier: GPL-3.0-only 
+
+use miniaudio::{Context, DeviceId, DeviceIdAndName};
 
 pub mod capture;
 pub mod playback;
 
+#[derive(PartialEq)]
+pub enum DeviceKind{
+    Capture,
+    Playback,
+}
 pub struct Audio {}
 impl Audio {
     /// Returns all the capture devices
@@ -50,5 +58,30 @@ impl Audio {
                 }
             })
             .expect("failed to get devices");
+    }
+
+    pub fn get_device_id(name: &String, kind: DeviceKind) -> Option<DeviceId>{
+        let context = Context::new(&[], None).unwrap();
+        let mut id = None;
+        context
+            .with_devices(|playback_devices, capture_devices| {
+                if kind == DeviceKind::Capture{
+                    for device in capture_devices.iter() {
+                        if device.name() == name {
+                            id = Some(device.id().clone());
+                        }
+                    }
+                }
+                else{
+                    for device in playback_devices.iter() {
+                        if device.name() == name {
+                            id = Some(device.id().clone());
+                        }
+                    }
+                }
+                
+            })
+            .expect("failed to get devices");
+        id
     }
 }

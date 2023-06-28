@@ -1,6 +1,10 @@
+// SPDX-FileCopyrightText: Copyright 2023 Savi
+// SPDX-License-Identifier: GPL-3.0-only 
+
+use log::debug;
 use tokio::runtime::Runtime;
 use tokio::net::UdpSocket;
-use std::{sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}, thread};
+use std::{sync::{Arc, Mutex, atomic::{AtomicBool, Ordering, AtomicU64}}, thread, ops::Add};
 use miniaudio::DeviceConfig;
 use crate::audio::playback::AudioPlayback;
 use std::cmp::Reverse;
@@ -56,21 +60,18 @@ use std::collections::BinaryHeap;
 /// }
 /// ```
 pub struct AudioPeer {
-    uid: u8,
     ready: Arc<AtomicBool>,
-    packet_count: u64,
+    packet_count: Arc<AtomicU64>,
     volume: Arc<Mutex<u8>>,
     udpsocket: Arc<Mutex<std::net::UdpSocket>>,
 }
 impl AudioPeer {
     /// Creates a new AudioPeer
     /// # Arguments
-    /// * `uid` - The unique id of the peer
     /// * `bind` - The address to bind to
-    pub fn new(uid: u8, bind: String) -> AudioPeer {
+    pub fn new(bind: String) -> AudioPeer {
         AudioPeer {
-            uid: uid,
-            packet_count: 0,
+            packet_count: Arc::new(AtomicU64::new(0)),
             ready: Arc::new(AtomicBool::new(false)),
             volume: Arc::new(Mutex::new(100)),
             //tk_socketqueue: Arc::new(Mutex::new(BinaryHeap::new())),
@@ -80,31 +81,27 @@ impl AudioPeer {
         }
     }
 
+    // TODO: change playback_config to an AudioPlayback object
     /// Connects to a peer
     /// # Arguments
     /// * `addr` - The address to connect to
     /// * `playback_config` - The configuration for the playback device
     pub fn connect(&self, addr: String, playback_config: DeviceConfig) {
+        //self.target_username = username;
         //measure time
-        let start = std::time::Instant::now();
-        let mut conn = self.udpsocket.lock().unwrap().connect(&addr);
+        //let start = std::time::Instant::now();
+        
+        let _ = self.udpsocket.lock().unwrap().connect(&addr).expect("couldn't connect to address");
         //connect to server
-        while conn.is_err() {
-            conn = self.udpsocket.lock().unwrap().connect(&addr);
-            if start.elapsed().as_secs() > 5 {
-                panic!("couldn't connect to server");
-            }
-            //thread::sleep(std::time::Duration::from_millis(10));
-        }
         let socket_clone = self.udpsocket.lock().unwrap().try_clone().unwrap();
 
         let volume = self.volume.clone();
-        let audio_playback = AudioPlayback::new(playback_config);
+        let mut audio_playback = AudioPlayback::new(playback_config);
         let ready = self.ready.clone();
         //Avoids a weird bug where the cpu usage grows when one of the two peers never receives a packet
         self.udpsocket.lock().unwrap().send(&[1]).unwrap();
         
-
+        
         thread::spawn(move || {
             audio_playback.start();
             let rt = Runtime::new().unwrap();
@@ -113,21 +110,26 @@ impl AudioPeer {
             //let mut start = std::time::Instant::now();
             
             let playback_arc = audio_playback.get_playback_arc();
+            
             rt.block_on(async move {
                 let tk_socket = UdpSocket::from_std(socket_clone).unwrap();
                 let mut data = [0; 1024];
                 loop {
                     match tk_socket.try_recv(&mut data[..]) {
                         Ok(n) => {
-                            if n == 1 {
+                            if n == 1 && !ready.load(Ordering::Relaxed){
                                 /* TODO[LATENCY]: this may or may not be implemented
                                 let _ = tk_socket.send(&[1]).await;
                                 let elapsed = start.elapsed();
                                 println!("Latency: {}ms", elapsed.as_millis());
                                 start = std::time::Instant::now();
                                 */
+                                debug!("Ready");
                                 ready.store(true, Ordering::Relaxed);
                                 tk_socket.send(&[1]).await.unwrap();
+                                continue;
+                            }
+                            if n < 8 {
                                 continue;
                             }
                             //Deserialize packet count
@@ -141,7 +143,9 @@ impl AudioPeer {
                             buffer.push(Reverse(voice));
                         }
                         // False-positive, continue
-                        Err(ref e) if e.kind() == tokio::io::ErrorKind::WouldBlock || e.kind() == tokio::io::ErrorKind::ConnectionRefused => {}
+                        Err(ref e) if e.kind() == tokio::io::ErrorKind::WouldBlock || e.kind() == tokio::io::ErrorKind::ConnectionRefused => {
+                            println!("false positive");
+                        }
                         Err(e) => {
                             panic!("{:?}",e.kind());
                         }
@@ -170,13 +174,13 @@ impl AudioPeer {
     /// * `usize` - The number of bytes sent
     /// # Errors
     /// * `std::io::Error` - If the peer is not ready
-    pub fn send(&mut self, data: Vec<u8>) -> std::io::Result<usize> {
+    pub fn send(&self, data: Vec<u8>) -> std::io::Result<usize> {
         if !self.is_ready(){
             return Err(std::io::Error::new(std::io::ErrorKind::Other, "Peer not ready"));
         }
-
-        let mut serialized = bincode::serialize(&self.packet_count).unwrap();
-        self.packet_count += 1;
+        let packet_count = self.packet_count.fetch_add(1, Ordering::Relaxed);
+        let mut serialized = bincode::serialize(&(packet_count-1)).unwrap();
+        
         let mut payload = data;
         payload.append(serialized.as_mut());
         self.udpsocket
@@ -187,10 +191,6 @@ impl AudioPeer {
 
     pub fn change_volume(&self, volume: u8) {
         *self.volume.lock().unwrap() = volume;
-    }
-
-    pub fn get_uid(&self) -> u8 {
-        self.uid
     }
     
     pub fn is_ready(&self) -> bool {
