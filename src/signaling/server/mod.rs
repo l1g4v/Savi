@@ -51,6 +51,7 @@ impl SignalingServer {
         //let cipher_mainclone = self.cipher.clone();
         //let peers_mainclone = self.streams.clone();
         thread::scope(|scope| {
+            info!("Listening for connections");
             loop {
                 let (mut stream, _) = self.listener.accept().unwrap();
                 let mut stream_clone = stream.try_clone().unwrap();

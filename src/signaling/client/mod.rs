@@ -30,6 +30,7 @@ impl SignalingClient {
         let audio_peers = Arc::new(Mutex::new(HashMap::new()));
         let try_stream = TcpStream::connect(address);
         if try_stream.is_err() {
+            println!("Err: {:?}", try_stream.err());
             panic!("Failed to connect to server");
         } else {
             debug!("Connected to server");

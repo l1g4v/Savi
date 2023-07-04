@@ -19,6 +19,9 @@ use audio::playback::AudioPlayback;
 use audio::capture::AudioCapture;
 use audio::Audio;
 mod audio_peer;
+use audio_peer::AudioPeer;
+use signaling::server::SignalingServer;
+use signaling::client::SignalingClient;
 
 struct PeerListData {
     peers: Rc<slint::VecModel<Peer>>,
@@ -47,6 +50,7 @@ fn main() {
     let playback_id_clone = playback_id.clone();
     let playback_id_clone2 = playback_id.clone();
     let playback_id_clone3 = playback_id.clone();
+    let playback_id_clone4 = playback_id.clone();
     let capture_devices = Audio::get_input_devices();
     let playback_devices = Audio::get_output_devices();
 
@@ -75,6 +79,7 @@ fn main() {
     let capture_device_clone3 = capture_device.clone();
     let capture_device_clone4 = capture_device.clone();
     let capture_device_clone5 = capture_device.clone();
+    let capture_device_clone6 = capture_device.clone();
 
     app.global::<AudioDevices>().on_set_capture(move |id|{
         let threshold = app_clone.global::<AudioDevices>().get_input_threshold();
@@ -118,42 +123,42 @@ fn main() {
     let cs_instance_clone2 = cs_instance.clone();
 
     app.global::<Signaling>().on_create(move ||{
-        let listen = stun::Stun::get_address_ipv6();
-        let mut server = signaling_server::SignalingServer::new(listen.clone());
         let username = app_clone2.global::<SelfPeer>().get_name().to_string();
-        server.run(username, playback_id_clone2.lock().unwrap().clone(), listen.clone());
+        
+        let server = SignalingServer::new(username);
+        let listen = server.get_listen_address();
         let key = server.get_cipher_key();
+        cs_instance_clone.lock().unwrap().1 = Some(server);
+
+        let playback_name = playback_id_clone3.lock().unwrap().clone();
+        let cs_sinstance = cs_instance_clone.clone();
+        thread::spawn(move ||{
+            let t = cs_sinstance.lock().unwrap();
+            let server = t.1.as_ref().unwrap(); 
+            server.run(playback_name);
+        });
+        
         app_clone2.global::<Signaling>().set_address(slint::SharedString::from(listen));
         app_clone2.global::<Signaling>().set_key(slint::SharedString::from(key));
         app_clone2.global::<Signaling>().set_hosting(true);
+        
         let cd = capture_device_clone4.clone();
+        let cs_sisntance2 = cs_instance_clone.clone();
         thread::spawn(move ||{
-            let capture_arc = cd.clone().lock().unwrap().get_capture_arc();
-            let (mutex, cvar) = &*capture_arc;
+            let socket = cd.lock().unwrap().connect2queue();
+            let buf = &mut [0; 1024];
             loop {
-                let mut queue = mutex.lock().unwrap();
-                while queue.is_empty() {
-                    queue = cvar.wait(queue).unwrap(); // Wait until the vector has elements
-                }    
-                while queue.len() > 0{
-                    let payload = queue.pop().unwrap();
-                    server.send_voice_packet(payload);
+                let (amt, _src) = socket.recv_from(buf).unwrap();
+                if amt == 0 {
+                    continue;
                 }
+                let packet = buf[..amt].to_vec().clone();
+                cs_sisntance2.lock().unwrap().1.as_ref().unwrap().send_opus(packet);
             }
-        });
+            /*
+            let t = cs_sisntance2.lock().unwrap();
+            let server = t.1.as_ref().unwrap(); 
 
-    });
-
-    app.global::<Signaling>().on_connect(move |addr, key|{
-        let username = app_clone3.global::<SelfPeer>().get_name().to_string();
-        let client = signaling_client::SignalingClient::new(key.to_string(), username, addr.to_string());
-        let playback = playback_id_clone3.lock().unwrap().clone();
-        client.run(playback);
-        println!("Connecting to {}", addr.as_str());
-        println!("Key: {}", key.as_str());
-        app_clone3.global::<Signaling>().set_connected(true);
-        let cd = capture_device_clone5.clone();
-        thread::spawn(move ||{
             let capture_arc = cd.clone().lock().unwrap().get_capture_arc();
             let (mutex, cvar) = &*capture_arc;
             mutex.lock().unwrap().clear();
@@ -163,14 +168,67 @@ fn main() {
                     queue = cvar.wait(queue).unwrap(); // Wait until the vector has elements
                 }    
                 while queue.len() > 0{
+                    debug!("Sending opus packet");
                     let payload = queue.pop().unwrap();
-                    client.send_voice_packet(payload);
+                    server.send_opus(payload);
                 }
+            }*/
+        });
+
+    });
+    //TODO: implement a socket to read from AudioCapture
+    app.global::<Signaling>().on_connect(move |addr, key|{
+        let username = app_clone3.global::<SelfPeer>().get_name().to_string();
+
+        let client = SignalingClient::new(username, addr.to_string(), key.to_string());
+        cs_instance_clone2.lock().unwrap().0 = Some(client);
+        let playback_name = playback_id_clone4.lock().unwrap().clone();
+        let cs_cinstance = cs_instance_clone2.clone();
+        thread::spawn(move ||{
+            let t = cs_cinstance.lock().unwrap();
+            let client = t.0.as_ref().unwrap();
+            client.run(playback_name);
+        });
+
+        
+
+        println!("Connecting to {}", addr.as_str());
+        println!("Key: {}", key.as_str());
+        app_clone3.global::<Signaling>().set_connected(true);
+
+        let cd = capture_device_clone5.clone();
+        let cs_cinstance2 = cs_instance_clone2.clone();
+        thread::spawn(move ||{
+            let socket = cd.lock().unwrap().connect2queue();
+            let buf = &mut [0; 1024];
+            loop {
+                let (amt, _src) = socket.recv_from(buf).unwrap();
+                if amt == 0 {
+                    continue;
+                }
+                let packet = buf[..amt].to_vec().clone();
+                cs_cinstance2.lock().unwrap().0.as_ref().unwrap().send_opus(packet);
             }
+            /*
+            let t = cs_cinstance2.lock().unwrap();
+            let client = t.0.as_ref().unwrap();
+
+            let capture_arc = cd.clone().lock().unwrap().get_capture_arc();
+            let (mutex, cvar) = &*capture_arc;
+            mutex.lock().unwrap().clear();
+            loop {
+                let mut queue = mutex.lock().unwrap();
+                while queue.is_empty() {
+                    queue = cvar.wait(queue).unwrap(); // Wait until the vector has elements
+                }    
+                while queue.len() > 0{
+                    debug!("Sending opus packet");
+                    let payload = queue.pop().unwrap();
+                    client.send_opus(payload);
+                }
+            }*/
         });
     });
-
-
 
     app.run().unwrap();
     

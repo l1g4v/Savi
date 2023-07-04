@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: Copyright 2023 Savi
 // SPDX-License-Identifier: GPL-3.0-only 
 use miniaudio::{Device, DeviceId, Format, ShareMode, DeviceConfig, DeviceType};
-use std::{sync::{Arc, Mutex, Condvar, atomic::AtomicI32}};
+use std::{sync::{Arc, Mutex, Condvar, atomic::AtomicI32}, fmt::format, net::UdpSocket};
 use opus::{Encoder, Application, Channels, Bitrate};
+use rand::Rng;
 
 pub struct AudioCapture{
     capture_arc: Arc<(Mutex<Vec<Vec<u8>>>, Condvar)>,
@@ -10,6 +11,7 @@ pub struct AudioCapture{
     intensity: Arc<AtomicI32>,
     threshold: Arc<AtomicI32>,
     encoder: Arc<Mutex<Encoder>>,
+    queue_port: u16,
 }
 impl AudioCapture {
     /// Creates a new AudioCapture instance
@@ -20,6 +22,10 @@ impl AudioCapture {
     /// * `encoder_bitrate` - The bitrate to use for the encoder
     /// * `active_threshold` - The RMS threshold to record and encode the sample
     pub fn new(device_id: DeviceId, channels: u32, sample_rate: u32, encoder_bitrate: i32, active_threshold: i32) -> Self{
+        let queue_port = rand::thread_rng().gen_range(49152..65535);
+        let bind_addr = format!("127.0.0.1:{}", queue_port);
+        let socket = UdpSocket::bind(bind_addr).unwrap();
+
         let capture_arc = Arc::new((Mutex::new(Vec::new()), Condvar::new()));
         let capture_clone = capture_arc.clone();
 
@@ -59,15 +65,16 @@ impl AudioCapture {
 
             //If the RMS is above the threshold, encode and push to the queue
             if rms > threshold_clone.load(std::sync::atomic::Ordering::Relaxed){
-                let (vec, cvar) = &*capture_clone; 
+                //let (vec, cvar) = &*capture_clone; 
                 let encoded = encoder_clone.lock().unwrap().encode_vec(input_samples, num_samples).unwrap();
                 
                 //Push and notify to all threads waiting on content
-                vec.lock().unwrap().push(encoded);
-                cvar.notify_all();
+                //vec.lock().unwrap().push(encoded);
+                //cvar.notify_all();
+                let _ = socket.send(&encoded);
             }
         });
-        AudioCapture { capture_arc,  capture_device, intensity, threshold, encoder }
+        AudioCapture { capture_arc,  capture_device, intensity, threshold, encoder, queue_port }
     }
 
     /// Starts the capture device
@@ -98,6 +105,15 @@ impl AudioCapture {
     /// Changes the encoder bitrate
     pub fn set_encoder_bitrate(&self, value: i32){
         self.encoder.lock().unwrap().set_bitrate(Bitrate::Bits(value)).unwrap();
+    }
+
+    pub fn connect2queue(&self) -> UdpSocket{
+        let randport = rand::thread_rng().gen_range(49152..65535);
+        let bind_addr = format!("127.0.0.1:{}", randport);
+        let connect_addr = format!("127.0.0.1:{}", self.queue_port);
+        let socket = UdpSocket::bind(bind_addr).unwrap();
+        socket.connect(connect_addr).unwrap();
+        socket
     }
 
 

@@ -47,6 +47,7 @@ export component ConnectionPage inherits Page{
                     placeholder-text: "Signaling server address";
                     edited(x) => {
                         root.address = x;
+                        Signaling.address = x;
                     }
                 }
                 LineEdit{
@@ -56,6 +57,7 @@ export component ConnectionPage inherits Page{
                     placeholder-text: "Signaling server password";
                     edited(x) => {
                         root.password = x;
+                        Signaling.key = x;
                     }
                 }
             }
