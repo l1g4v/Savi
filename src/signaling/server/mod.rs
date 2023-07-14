@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use log::{debug, error, info, warn};
+use serde::de::Error;
 
 use crate::aes::AES;
 use crate::audio::Audio;
 use crate::audio::playback::AudioPlayback;
-use crate::audio_peer::{AudioPeer, self};
+use crate::audio_peer::AudioPeer;
 use crate::{signaling};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::net::{SocketAddr, TcpStream};
+use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -146,7 +147,7 @@ impl SignalingServer {
                                         let playback_config = AudioPlayback::create_config(playback_id, 2, 48_000);
                                         peer.connect(address.clone(), playback_config);
                                         loop{
-                                            thread::sleep(std::time::Duration::from_millis(10));
+                                            thread::sleep(std::time::Duration::from_millis(1));
                                         }
                                         
                                     }); 
@@ -165,7 +166,7 @@ impl SignalingServer {
                                         let playback_config = AudioPlayback::create_config(playback_id, 2, 48_000);
                                         peer.connect(address.clone(), playback_config);
                                         loop{
-                                            thread::sleep(std::time::Duration::from_millis(10));
+                                            thread::sleep(std::time::Duration::from_millis(1));
                                         }
                                         
                                     }); 
@@ -185,7 +186,7 @@ impl SignalingServer {
                             //let mut target = stream.try_clone().unwrap();
                             let try_send = target.write(&buf[0..size]);
                             if try_send.is_err() {
-                                debug!(
+                                error!(
                                     "Failed to send message to peer, connection is probably closed"
                                 );
                                 list.remove(&target_id);
@@ -200,10 +201,7 @@ impl SignalingServer {
     pub fn send_opus(&self, opus_packet: Vec<u8>) {
         let peers = self.audio_peers.lock().unwrap();
         for (_, _, peer) in peers.values() {
-            let status = peer.send(opus_packet.clone());
-            if status.is_err() {
-                error!("Failed to send opus packet to peer");
-            }
+            peer.send(opus_packet.clone());
         }
     }
 }

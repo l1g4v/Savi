@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: Copyright 2023 Savi
 // SPDX-License-Identifier: GPL-3.0-only 
 use miniaudio::{Device, DeviceId, Format, ShareMode, DeviceConfig, DeviceType};
-use std::{sync::{Arc, Mutex, Condvar, atomic::AtomicI32}, fmt::format, net::UdpSocket};
+use std::{sync::{Arc, Mutex, Condvar, atomic::AtomicI32, mpsc::Sender}, fmt::format, net::UdpSocket};
 use opus::{Encoder, Application, Channels, Bitrate};
 use rand::Rng;
-
+use std::sync::mpsc::channel;
 pub struct AudioCapture{
     capture_arc: Arc<(Mutex<Vec<Vec<u8>>>, Condvar)>,
     capture_device: Device,
@@ -12,6 +12,7 @@ pub struct AudioCapture{
     threshold: Arc<AtomicI32>,
     encoder: Arc<Mutex<Encoder>>,
     queue_port: u16,
+    conn_port: u16
 }
 impl AudioCapture {
     /// Creates a new AudioCapture instance
@@ -21,10 +22,14 @@ impl AudioCapture {
     /// * `sample_rate` - The sample rate to use
     /// * `encoder_bitrate` - The bitrate to use for the encoder
     /// * `active_threshold` - The RMS threshold to record and encode the sample
-    pub fn new(device_id: DeviceId, channels: u32, sample_rate: u32, encoder_bitrate: i32, active_threshold: i32) -> Self{
-        let queue_port = rand::thread_rng().gen_range(49152..65535);
+    pub fn new(device_id: DeviceId, channels: u32, sample_rate: u32, encoder_bitrate: i32, active_threshold: i32, tx: Sender<Vec<u8>>) -> Self{
+        let queue_port = rand::thread_rng().gen_range(49152..65534);
+        let conn_port = rand::thread_rng().gen_range(49152..65534);
         let bind_addr = format!("127.0.0.1:{}", queue_port);
-        let socket = UdpSocket::bind(bind_addr).unwrap();
+        let conn_addr = format!("127.0.0.1:{}", conn_port);
+        info!("Audio capture queue bound to {}", bind_addr);
+        let socket = UdpSocket::bind(bind_addr.clone()).unwrap();
+
 
         let capture_arc = Arc::new((Mutex::new(Vec::new()), Condvar::new()));
         let capture_clone = capture_arc.clone();
@@ -71,10 +76,17 @@ impl AudioCapture {
                 //Push and notify to all threads waiting on content
                 //vec.lock().unwrap().push(encoded);
                 //cvar.notify_all();
-                let _ = socket.send(&encoded);
+                tx.send(encoded).unwrap();
+                /*let status = socket.send_to(&encoded, conn_addr.clone());
+                if status.is_err(){
+                    error!("Error sending to queue: {}", status.err().unwrap());
+                }
+                else{
+                    //debug!("Sent {} bytes to queue", status.unwrap());
+                }*/
             }
         });
-        AudioCapture { capture_arc,  capture_device, intensity, threshold, encoder, queue_port }
+        AudioCapture { capture_arc,  capture_device, intensity, threshold, encoder, queue_port, conn_port }
     }
 
     /// Starts the capture device
@@ -107,13 +119,12 @@ impl AudioCapture {
         self.encoder.lock().unwrap().set_bitrate(Bitrate::Bits(value)).unwrap();
     }
 
-    pub fn connect2queue(&self) -> UdpSocket{
-        let randport = rand::thread_rng().gen_range(49152..65535);
-        let bind_addr = format!("127.0.0.1:{}", randport);
-        let connect_addr = format!("127.0.0.1:{}", self.queue_port);
-        let socket = UdpSocket::bind(bind_addr).unwrap();
-        socket.connect(connect_addr).unwrap();
-        socket
+    pub fn get_queue_addr(&self) -> String{
+        format!("127.0.0.1:{}", self.queue_port)
+    }
+
+    pub fn get_conn_addr(&self) -> String{
+        format!("127.0.0.1:{}", self.conn_port)
     }
 
 

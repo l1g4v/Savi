@@ -154,8 +154,9 @@ impl SignalingClient {
                             let playback_id = Audio::get_device_id(&playback_clone, crate::audio::DeviceKind::Playback).unwrap();
                             let playback_config = AudioPlayback::create_config(playback_id, 2, 48_000);
                             peer.connect(address.clone(), playback_config);
+                            drop(peers);
                             loop{
-                                thread::sleep(std::time::Duration::from_millis(10));
+                                thread::sleep(std::time::Duration::from_millis(1));
                             }
                             
                         }); 
@@ -173,8 +174,9 @@ impl SignalingClient {
                             let playback_id = Audio::get_device_id(&playback_clone, crate::audio::DeviceKind::Playback).unwrap();
                             let playback_config = AudioPlayback::create_config(playback_id, 2, 48_000);
                             peer.connect(address.clone(), playback_config);
+                            drop(peers);
                             loop{
-                                thread::sleep(std::time::Duration::from_millis(10));
+                                thread::sleep(std::time::Duration::from_millis(1));
                             }
                             
                         });  
@@ -187,12 +189,16 @@ impl SignalingClient {
         });
     }
     pub fn send_opus(&self, opus_packet: Vec<u8>) {
-        let peers = self.audio_peers.lock().unwrap();
+        let trylock = self.audio_peers.try_lock();
+        if trylock.is_err(){
+            error!("Failed to lock audio peers, err:{}", trylock.err().unwrap());
+            return;
+        }
+        let peers = trylock.unwrap();
+        debug!("N peers: {}", peers.len());
         for (_, _, peer) in peers.values() {
-            let status = peer.send(opus_packet.clone());
-            if status.is_err() {
-                error!("Failed to send opus packet to peer");
-            }
+            debug!("Sending opus packet to peer");
+            peer.send(opus_packet.clone());
         }
     }
 }

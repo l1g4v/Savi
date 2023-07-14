@@ -5,9 +5,12 @@
 extern crate log;
 
 use slint::Model;
+use std::fmt::format;
+use std::net::UdpSocket;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicI32};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
+use std::sync::mpsc::channel;
 use std::thread;
 use tokio::runtime::Runtime;
 slint::include_modules!();
@@ -22,6 +25,8 @@ mod audio_peer;
 use audio_peer::AudioPeer;
 use signaling::server::SignalingServer;
 use signaling::client::SignalingClient;
+
+use crate::audio::capture;
 
 struct PeerListData {
     peers: Rc<slint::VecModel<Peer>>,
@@ -54,6 +59,7 @@ fn main() {
     let capture_devices = Audio::get_input_devices();
     let playback_devices = Audio::get_output_devices();
 
+    
     let mut capture_devices_str = Vec::new();
     for device in capture_devices.iter() {
         capture_devices_str.push(slint::SharedString::from(device.0.clone()));
@@ -71,9 +77,19 @@ fn main() {
 
     *playback_id_clone.lock().unwrap() = playback_devices[0].0.clone();
 
+    let (capture_tx, capture_rx) = mpsc::channel::<Vec<u8>>();
+    let capture_rx_arc = Arc::new(Mutex::new(capture_rx));
+    let capture_rx_arc2 = capture_rx_arc.clone();
+
     let capture_device: Arc<Mutex<AudioCapture>> = Arc::new(Mutex::new(AudioCapture::new(capture_devices[0].1.clone(), 
-    2, 48_000, 96_000, 0)));
+    2, 48_000, 96_000, 0, capture_tx.clone())));
     capture_device.lock().unwrap().start();
+
+    let bind = capture_device.lock().unwrap().get_conn_addr();
+    let connect = capture_device.lock().unwrap().get_queue_addr();
+    info!("Bind: {}", bind);
+    info!("Connect: {}", connect);
+
     let capture_device_clone = capture_device.clone();
     let capture_device_clone2 = capture_device.clone();
     let capture_device_clone3 = capture_device.clone();
@@ -86,7 +102,7 @@ fn main() {
         println!("Capture device set to {}", capture_devices_str[id as usize].as_str());
         capture_device_clone.lock().unwrap().stop();
         *capture_device_clone.lock().unwrap() = AudioCapture::new(capture_devices[id as usize].1.clone(), 
-        2, 48_000, 96_000, threshold);
+        2, 48_000, 96_000, threshold, capture_tx.clone());
         capture_device_clone.lock().unwrap().start();
     });
 
@@ -145,16 +161,7 @@ fn main() {
         let cd = capture_device_clone4.clone();
         let cs_sisntance2 = cs_instance_clone.clone();
         thread::spawn(move ||{
-            let socket = cd.lock().unwrap().connect2queue();
-            let buf = &mut [0; 1024];
-            loop {
-                let (amt, _src) = socket.recv_from(buf).unwrap();
-                if amt == 0 {
-                    continue;
-                }
-                let packet = buf[..amt].to_vec().clone();
-                cs_sisntance2.lock().unwrap().1.as_ref().unwrap().send_opus(packet);
-            }
+            
             /*
             let t = cs_sisntance2.lock().unwrap();
             let server = t.1.as_ref().unwrap(); 
@@ -181,34 +188,55 @@ fn main() {
         let username = app_clone3.global::<SelfPeer>().get_name().to_string();
 
         let client = SignalingClient::new(username, addr.to_string(), key.to_string());
-        cs_instance_clone2.lock().unwrap().0 = Some(client);
+        //cs_instance_clone2.lock().unwrap().0 = Some(client);
         let playback_name = playback_id_clone4.lock().unwrap().clone();
-        let cs_cinstance = cs_instance_clone2.clone();
-        thread::spawn(move ||{
-            let t = cs_cinstance.lock().unwrap();
-            let client = t.0.as_ref().unwrap();
-            client.run(playback_name);
-        });
-
-        
+        //let cs_cinstance = cs_instance_clone2.clone();        
 
         println!("Connecting to {}", addr.as_str());
         println!("Key: {}", key.as_str());
         app_clone3.global::<Signaling>().set_connected(true);
 
-        let cd = capture_device_clone5.clone();
-        let cs_cinstance2 = cs_instance_clone2.clone();
+        //let cd = capture_device_clone5.clone();
+        let bind = capture_device_clone5.lock().unwrap().get_conn_addr();
+        let connect = capture_device_clone5.lock().unwrap().get_queue_addr();
+        info!("Bind: {}", bind);
+        info!("Connect: {}", connect);
+        //let cs_cinstance2 = cs_instance_clone2.clone();
+        let rx = capture_rx_arc2.clone();
         thread::spawn(move ||{
-            let socket = cd.lock().unwrap().connect2queue();
-            let buf = &mut [0; 1024];
-            loop {
-                let (amt, _src) = socket.recv_from(buf).unwrap();
-                if amt == 0 {
-                    continue;
+            let client_arc = Arc::new(client);
+            let client_arc2 = client_arc.clone();
+            let rx2 = rx.clone();
+            thread::spawn(move ||{
+                client_arc2.run(playback_name);
+            });
+            thread::spawn(move||{
+                let c_rx = rx2.lock().unwrap();
+                loop{
+                    let packet = c_rx.recv();
+                    if packet.is_err(){
+                        continue;
+                    }
+                    client_arc.send_opus(packet.unwrap());
+                    thread::sleep(std::time::Duration::from_millis(1));
                 }
-                let packet = buf[..amt].to_vec().clone();
-                cs_cinstance2.lock().unwrap().0.as_ref().unwrap().send_opus(packet);
-            }
+                /*let socket = UdpSocket::bind(bind).unwrap();
+        
+                let mut buf = [0; 2048];
+                loop {
+                    debug!("Waiting for opus packet");
+                    let (amt, _src) = socket.recv_from(&mut buf).unwrap();
+                    debug!("{:?}", &buf[..amt]);
+                    let packet = buf[..amt].to_vec();
+                    let arc_clone = client_arc.clone();
+                    //thread::spawn(move ||{
+                        arc_clone.send_opus(packet);
+                    //});
+                    
+                }*/
+            });
+            
+
             /*
             let t = cs_cinstance2.lock().unwrap();
             let client = t.0.as_ref().unwrap();

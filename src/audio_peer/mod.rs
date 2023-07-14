@@ -4,7 +4,7 @@
 use log::debug;
 use tokio::runtime::Runtime;
 use tokio::net::UdpSocket;
-use std::{sync::{Arc, Mutex, atomic::{AtomicBool, Ordering, AtomicU64}}, thread, ops::Add};
+use std::{sync::{Arc, Mutex, atomic::{AtomicBool, Ordering, AtomicU64}}, thread};
 use miniaudio::DeviceConfig;
 use crate::audio::playback::AudioPlayback;
 use std::cmp::Reverse;
@@ -96,7 +96,7 @@ impl AudioPeer {
         let socket_clone = self.udpsocket.lock().unwrap().try_clone().unwrap();
 
         let volume = self.volume.clone();
-        let mut audio_playback = AudioPlayback::new(playback_config);
+        let audio_playback = AudioPlayback::new(playback_config);
         let ready = self.ready.clone();
         //Avoids a weird bug where the cpu usage grows when one of the two peers never receives a packet
         self.udpsocket.lock().unwrap().send(&[1]).unwrap();
@@ -135,7 +135,6 @@ impl AudioPeer {
                             //Deserialize packet count
                             let received = data[..n].to_vec();
                             let recv_packet_count: u64 = bincode::deserialize(&received[n - 8..]).unwrap();
-
                             //Push to playback queue
                             let mut opus = data[..n - 8].to_vec();
                             opus.push(*volume.lock().unwrap());
@@ -151,7 +150,7 @@ impl AudioPeer {
                         }
                     }
                     //the "is this a jitter buffer¿" implementation
-                    if buffer.len() > 1 {
+                    while buffer.len() > 1 {
                         let (mutex, cvar) = &*playback_arc;
                         let mut play_queue = mutex.lock().unwrap();
                         while !buffer.is_empty() {
@@ -174,19 +173,19 @@ impl AudioPeer {
     /// * `usize` - The number of bytes sent
     /// # Errors
     /// * `std::io::Error` - If the peer is not ready
-    pub fn send(&self, data: Vec<u8>) -> std::io::Result<usize> {
+    pub fn send(&self, data: Vec<u8>) {
         if !self.is_ready(){
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, "Peer not ready"));
+            return; //Err(std::io::Error::new(std::io::ErrorKind::Other, "Peer not ready"));
         }
         let packet_count = self.packet_count.fetch_add(1, Ordering::Relaxed);
-        let mut serialized = bincode::serialize(&(packet_count-1)).unwrap();
+        let mut serialized = bincode::serialize(&packet_count).unwrap();
         
         let mut payload = data;
         payload.append(serialized.as_mut());
         self.udpsocket
             .lock()
             .unwrap()
-            .send(&payload)
+            .send(&payload);
     }
 
     pub fn change_volume(&self, volume: u8) {

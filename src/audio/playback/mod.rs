@@ -48,18 +48,18 @@ impl AudioPlayback {
             }
 
             let len = output.as_samples_mut::<i16>().len();
-            let mut decoded: Vec<i16> = vec![0; len*2];
+            let mut decoded = [0; 2048];
             if queue.len() > 1 {
                 //Decode opus packet
                 let payload = queue.remove(0);
-                let _ = decoder.decode(&payload.as_slice()[..payload.len()-1], decoded.as_mut_slice(), false).unwrap();
+                let _ = decoder.decode(&payload.as_slice()[..payload.len()-1], &mut decoded, false).unwrap();
 
                 //Apply volume by scaling the decoded samples
                 let volume = payload[payload.len()-1] as f32 / 100.0;
                 decoded.iter_mut().for_each(|x| *x = (*x as f32 * volume)as i16);
 
                 //Copy the decoded samples to the output buffer
-                output.as_samples_mut::<i16>().copy_from_slice(&decoded.as_slice()[..len]);
+                output.as_samples_mut::<i16>().copy_from_slice(&decoded[..len]);
             }
         });
         AudioPlayback { playback_arc,  playback_device }
