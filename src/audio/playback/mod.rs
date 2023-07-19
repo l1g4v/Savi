@@ -64,8 +64,7 @@ impl AudioPlayback {
             if queue.len() > 1 {
                 //Decode opus packet
                 let payload = queue.remove(0);
-                let x = decoder.decode(&payload.as_slice()[..payload.len()-1], &mut decoded, false).unwrap();
-                println!("load len: {}, dec len: {}, dev len: {}", payload.len(), x, len);
+                let _ = decoder.decode(&payload.as_slice()[..payload.len()-1], &mut decoded, false).unwrap();
                 //Apply volume by scaling the decoded samples
                 let volume = payload[payload.len()-1] as f32 / 100.0;
                 decoded.iter_mut().for_each(|x| *x = (*x as f32 * volume)as i16);

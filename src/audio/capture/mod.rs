@@ -71,20 +71,8 @@ impl AudioCapture {
 
             //If the RMS is above the threshold, encode and push to the queue
             if rms > threshold_clone.load(std::sync::atomic::Ordering::Relaxed){
-                //let (vec, cvar) = &*capture_clone; 
                 let encoded = encoder_clone.lock().unwrap().encode_vec(input_samples, num_samples).unwrap();
-                
-                //Push and notify to all threads waiting on content
-                //vec.lock().unwrap().push(encoded);
-                //cvar.notify_all();
                 tx.send(encoded).unwrap();
-                /*let status = socket.send_to(&encoded, conn_addr.clone());
-                if status.is_err(){
-                    error!("Error sending to queue: {}", status.err().unwrap());
-                }
-                else{
-                    //debug!("Sent {} bytes to queue", status.unwrap());
-                }*/
             }
         });
         AudioCapture { capture_arc,  capture_device, intensity, threshold, encoder, queue_port, conn_port }

@@ -115,6 +115,8 @@ fn main() {
 
     app.global::<AudioDevices>().set_capture_devices(crc.into());
     app.global::<AudioDevices>().set_playback_devices(prc.into());
+    app.global::<AudioDevices>().set_capture_backend(backend_list[0].clone());
+    app.global::<AudioDevices>().set_playback_backend(backend_list[0].clone());
     app.global::<AudioDevices>().set_backends(cbrc.into());
 
     *playback_id_clone.lock().unwrap() = playback_devices[0].0.clone();
@@ -219,42 +221,33 @@ fn main() {
         let server = SignalingServer::new(username);
         let listen = server.get_listen_address();
         let key = server.get_cipher_key();
-        cs_instance_clone.lock().unwrap().1 = Some(server);
-
-        let playback_name = playback_id_clone3.lock().unwrap().clone();
-        let cs_sinstance = cs_instance_clone.clone();
-        thread::spawn(move ||{
-            let t = cs_sinstance.lock().unwrap();
-            let server = t.1.as_ref().unwrap(); 
-            server.run(backend, playback_name);
-        });
         
         app_clone2.global::<Signaling>().set_address(slint::SharedString::from(listen));
         app_clone2.global::<Signaling>().set_key(slint::SharedString::from(key));
         app_clone2.global::<Signaling>().set_hosting(true);
-        
-        let cd = capture_device_clone4.clone();
-        let cs_sisntance2 = cs_instance_clone.clone();
-        thread::spawn(move ||{
-            
-            /*
-            let t = cs_sisntance2.lock().unwrap();
-            let server = t.1.as_ref().unwrap(); 
 
-            let capture_arc = cd.clone().lock().unwrap().get_capture_arc();
-            let (mutex, cvar) = &*capture_arc;
-            mutex.lock().unwrap().clear();
-            loop {
-                let mut queue = mutex.lock().unwrap();
-                while queue.is_empty() {
-                    queue = cvar.wait(queue).unwrap(); // Wait until the vector has elements
-                }    
-                while queue.len() > 0{
-                    debug!("Sending opus packet");
-                    let payload = queue.pop().unwrap();
-                    server.send_opus(payload);
+        let playback_name = playback_id_clone3.lock().unwrap().clone();
+
+        let rx = capture_rx_arc.clone();
+        thread::spawn(move ||{
+            let server_arc = Arc::new(server);
+            let server_arc2 = server_arc.clone();
+            let rx2 = rx.clone();
+            thread::spawn(move ||{
+                server_arc2.run(backend, playback_name);
+            });
+            thread::spawn(move||{
+                let c_rx = rx2.lock().unwrap();
+                loop{
+                    //TODO: Implement some queue/buffer/idk
+                    let packet = c_rx.recv();
+                    if packet.is_err(){
+                        continue;
+                    }
+                    let p = packet.unwrap();
+                    server_arc.send_opus(p);
                 }
-            }*/
+            });
         });
 
     });
@@ -295,48 +288,9 @@ fn main() {
                         continue;
                     }
                     let p = packet.unwrap();
-                    let len = p.len();
-                    info!("Packet: {:#?}", p);
-                    info!("Packet len: {}", len);
                     client_arc.send_opus(p);
-                    
-                    //client_arc.send_opus(packet.unwrap());
                 }
-                /*let socket = UdpSocket::bind(bind).unwrap();
-        
-                let mut buf = [0; 2048];
-                loop {
-                    debug!("Waiting for opus packet");
-                    let (amt, _src) = socket.recv_from(&mut buf).unwrap();
-                    debug!("{:?}", &buf[..amt]);
-                    let packet = buf[..amt].to_vec();
-                    let arc_clone = client_arc.clone();
-                    //thread::spawn(move ||{
-                        arc_clone.send_opus(packet);
-                    //});
-                    
-                }*/
             });
-            
-
-            /*
-            let t = cs_cinstance2.lock().unwrap();
-            let client = t.0.as_ref().unwrap();
-
-            let capture_arc = cd.clone().lock().unwrap().get_capture_arc();
-            let (mutex, cvar) = &*capture_arc;
-            mutex.lock().unwrap().clear();
-            loop {
-                let mut queue = mutex.lock().unwrap();
-                while queue.is_empty() {
-                    queue = cvar.wait(queue).unwrap(); // Wait until the vector has elements
-                }    
-                while queue.len() > 0{
-                    debug!("Sending opus packet");
-                    let payload = queue.pop().unwrap();
-                    client.send_opus(payload);
-                }
-            }*/
         });
     });
 
