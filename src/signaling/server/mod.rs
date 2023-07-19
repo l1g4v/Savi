@@ -43,7 +43,7 @@ impl SignalingServer {
     pub fn get_cipher_key(&self) -> String {
         self.cipher.get_key().clone()
     }
-    pub fn run(&self, playback_name: String) {
+    pub fn run(&self, backend:String ,playback_name: String) {
         let listener_tryclone = self.listener.try_clone();
         if listener_tryclone.is_err() {
             panic!("Failed to clone listener");
@@ -53,7 +53,9 @@ impl SignalingServer {
         //let peers_mainclone = self.streams.clone();
         thread::scope(|scope| {
             info!("Listening for connections");
+            let bkc = backend.clone();
             loop {
+                let bck = bkc.clone();
                 let (mut stream, _) = self.listener.accept().unwrap();
                 let mut stream_clone = stream.try_clone().unwrap();
                 info!("New connection");
@@ -75,7 +77,9 @@ impl SignalingServer {
                 let playback_clone = playback_name.clone();
                 scope.spawn(move || {
                     let audio_peers = self.audio_peers.clone();
+                    let bkk = bck.clone();
                     loop {
+                        let backend = bkk.clone();
                         let buf = &mut [0; 2048];
                         let size = stream_clone.read(buf).unwrap();
                         if size == 0 {
@@ -143,9 +147,9 @@ impl SignalingServer {
                                         let item = peers.get(&peer_id);
                                         let (_, address, peer) = item.unwrap();
             
-                                        let playback_id = Audio::get_device_id(&playback_clone, crate::audio::DeviceKind::Playback).unwrap();
+                                        let playback_id = Audio::get_device_id(backend.clone(), &playback_clone, crate::audio::DeviceKind::Playback).unwrap();
                                         let playback_config = AudioPlayback::create_config(playback_id, 2, 48_000);
-                                        peer.connect(address.clone(), playback_config);
+                                        peer.connect(address.clone(), backend.clone() ,playback_config);
                                         loop{
                                             thread::sleep(std::time::Duration::from_millis(1));
                                         }
@@ -162,9 +166,9 @@ impl SignalingServer {
                                         let item = peers.get(&peer_id);
                                         let (_, address, peer) = item.unwrap();
             
-                                        let playback_id = Audio::get_device_id(&playback_clone, crate::audio::DeviceKind::Playback).unwrap();
+                                        let playback_id = Audio::get_device_id(backend.clone(), &playback_clone, crate::audio::DeviceKind::Playback).unwrap();
                                         let playback_config = AudioPlayback::create_config(playback_id, 2, 48_000);
-                                        peer.connect(address.clone(), playback_config);
+                                        peer.connect(address.clone(), backend.clone(), playback_config);
                                         loop{
                                             thread::sleep(std::time::Duration::from_millis(1));
                                         }

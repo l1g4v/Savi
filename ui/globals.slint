@@ -11,11 +11,16 @@ export struct Peer{
 export global AudioDevices{
     in property <[string]> capture_devices;
     in property <[string]> playback_devices;
+    in property <[string]> backends;
     in-out property  <int> input_intensity;
     in property <int> input_threshold;
     in property <bool> on-settings;
+    in property <string> capture_backend;
+    in property <string> playback_backend;
     callback set-capture(int);
     callback set-playback(string);
+    callback set-capture-backend(string);
+    callback set-playback-backend(string);
     callback set-bitrate(string);
     callback in-settings();
 }

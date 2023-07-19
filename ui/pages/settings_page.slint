@@ -17,7 +17,23 @@ export component SettingsPage inherits Page{
             HorizontalLayout{
                 spacing: 8px;
                 Text{
-                    text: "Input device:   ";
+                    text: "Device backend:";
+                    font-size: 15px;
+                    vertical-alignment: TextVerticalAlignment.center;
+                }
+                ComboBox {
+                    y: 0px;
+                    //width: self.preferred-width;
+                    //height: self.preferred-height;
+                    model: AudioDevices.backends;
+                    current-index: 0;
+                    selected(name) => {
+                        AudioDevices.set-capture-backend(name);
+                        AudioDevices.capture-backend = name;
+                    }
+                }
+                Text{
+                    text: "Input device:";
                     font-size: 15px;
                     vertical-alignment: TextVerticalAlignment.center;
                     horizontal-alignment: TextHorizontalAlignment.center;
@@ -35,6 +51,22 @@ export component SettingsPage inherits Page{
             }
             HorizontalLayout{
                 spacing: 8px;
+                Text{
+                    text: "Device backend:";
+                    font-size: 15px;
+                    vertical-alignment: TextVerticalAlignment.center;
+                }
+                ComboBox {
+                    y: 0px;
+                    //width: self.preferred-width;
+                    //height: self.preferred-height;
+                    model: AudioDevices.backends;
+                    current-index: 0;
+                    selected(name) => {
+                        AudioDevices.set-playback-backend(name);
+                        AudioDevices.playback-backend = name;
+                    }
+                }
                 Text{
                     text: "Output device:";
                     font-size: 15px;

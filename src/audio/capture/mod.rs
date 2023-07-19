@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2023 Savi
 // SPDX-License-Identifier: GPL-3.0-only 
-use miniaudio::{Device, DeviceId, Format, ShareMode, DeviceConfig, DeviceType};
+use miniaudio::{Device, DeviceId, Format, ShareMode, DeviceConfig, DeviceType, Backend, Context};
 use std::{sync::{Arc, Mutex, Condvar, atomic::AtomicI32, mpsc::Sender}, fmt::format, net::UdpSocket};
 use opus::{Encoder, Application, Channels, Bitrate};
 use rand::Rng;
@@ -22,7 +22,8 @@ impl AudioCapture {
     /// * `sample_rate` - The sample rate to use
     /// * `encoder_bitrate` - The bitrate to use for the encoder
     /// * `active_threshold` - The RMS threshold to record and encode the sample
-    pub fn new(device_id: DeviceId, channels: u32, sample_rate: u32, encoder_bitrate: i32, active_threshold: i32, tx: Sender<Vec<u8>>) -> Self{
+    pub fn new(backend: Backend, device_id: DeviceId, channels: u32, sample_rate: u32, encoder_bitrate: i32, active_threshold: i32, tx: Sender<Vec<u8>>) -> Self{
+        let context = Context::new(&[backend], None).unwrap();
         let queue_port = rand::thread_rng().gen_range(49152..65534);
         let conn_port = rand::thread_rng().gen_range(49152..65534);
         let bind_addr = format!("127.0.0.1:{}", queue_port);
@@ -34,7 +35,7 @@ impl AudioCapture {
         let capture_arc = Arc::new((Mutex::new(Vec::new()), Condvar::new()));
         let capture_clone = capture_arc.clone();
 
-        let intensity = Arc::new(AtomicI32::new(-100));
+        let intensity = Arc::new(AtomicI32::new(0));
         let intensity_clone = intensity.clone();
 
         let threshold = Arc::new(AtomicI32::new(active_threshold));
@@ -46,7 +47,7 @@ impl AudioCapture {
         config.capture_mut().set_share_mode(ShareMode::Shared);
         config.capture_mut().set_device_id(Some(device_id));
         config.set_sample_rate(sample_rate);
-
+        config.set_period_size_in_milliseconds(10);
         
         let encoder_channels = match channels {
             1 => Channels::Mono,
@@ -58,7 +59,7 @@ impl AudioCapture {
         encoder.lock().unwrap().set_vbr(true).unwrap();
         let encoder_clone = encoder.clone();
 
-        let mut capture_device: Device = Device::new(None, &config).unwrap();
+        let mut capture_device: Device = Device::new(Some(context), &config).unwrap();
         capture_device.set_data_callback(move |_, _, input|{
             let input_samples = input.as_samples::<i16>();
             let num_samples = input_samples.len();

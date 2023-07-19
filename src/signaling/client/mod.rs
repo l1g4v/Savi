@@ -58,7 +58,7 @@ impl SignalingClient {
             audio_peers,
         }
     }
-    pub fn run(&self, playback_name: String) {
+    pub fn run(&self, backend: String, playback_name: String) {
         let mut stream = self.stream.try_clone().unwrap();
         //Announce
         for i in 0..self.id {
@@ -83,7 +83,9 @@ impl SignalingClient {
             let playback_mainclone = playback_name.clone();
             let buf = &mut [0; 2048];
             let audio_peers = self.audio_peers.clone();
+            let bkc = backend.clone();
             loop {
+                let backend = bkc.clone(); 
                 let try_recv = stream.read(buf);
                 if try_recv.is_err() {
                     error!("Failed to read from server, connection lost");
@@ -151,9 +153,9 @@ impl SignalingClient {
                             let item = peers.get(&peer_id);
                             let (_, address, peer) = item.unwrap();
 
-                            let playback_id = Audio::get_device_id(&playback_clone, crate::audio::DeviceKind::Playback).unwrap();
+                            let playback_id = Audio::get_device_id(backend.clone() ,&playback_clone, crate::audio::DeviceKind::Playback).unwrap();
                             let playback_config = AudioPlayback::create_config(playback_id, 2, 48_000);
-                            peer.connect(address.clone(), playback_config);
+                            peer.connect(address.clone(), backend.clone(), playback_config);
                             drop(peers);
                             loop{
                                 thread::sleep(std::time::Duration::from_millis(1));
@@ -171,9 +173,9 @@ impl SignalingClient {
                             let item = peers.get(&peer_id);
                             let (_, address, peer) = item.unwrap();
 
-                            let playback_id = Audio::get_device_id(&playback_clone, crate::audio::DeviceKind::Playback).unwrap();
+                            let playback_id = Audio::get_device_id(backend.clone(), &playback_clone, crate::audio::DeviceKind::Playback).unwrap();
                             let playback_config = AudioPlayback::create_config(playback_id, 2, 48_000);
-                            peer.connect(address.clone(), playback_config);
+                            peer.connect(address.clone(), backend.clone(), playback_config);
                             drop(peers);
                             loop{
                                 thread::sleep(std::time::Duration::from_millis(1));

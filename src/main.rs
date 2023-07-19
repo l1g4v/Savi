@@ -4,13 +4,15 @@
 #[macro_use]
 extern crate log;
 
-use slint::Model;
+use miniaudio::{Context, Backend};
+use slint::{Model, SharedString};
 use std::fmt::format;
 use std::net::UdpSocket;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicI32};
 use std::sync::{Arc, Mutex, mpsc};
 use std::sync::mpsc::channel;
+
 use std::thread;
 use tokio::runtime::Runtime;
 slint::include_modules!();
@@ -44,11 +46,42 @@ impl PeerListData {
 
 
 fn main() {
+    //
+    #[cfg(target_os="windows")]
+    let backend_list: Vec<SharedString> = vec![
+        "Wasapi".into(),
+        "DirectSound".into(),
+        "WinMM".into(),
+    ];
+    #[cfg(target_os="linux")]
+    let backend_list: Vec<SharedString> = vec![
+        "PulseAudio".into(),
+        "ALSA".into(),
+        "JACK".into(),
+    ];
+    #[cfg(any(target_os="openbsd", target_os="freebsd", target_os="netbsd"))]
+    let backend_list: Vec<SharedString> = vec![
+        "sndio".into(),
+        "Audio4".into(),
+        "OSS".into(),
+    ];
+    #[cfg(target_os="macos")]
+    let backend_list: Vec<SharedString> = vec![
+        "CoreAudio".into(),
+        "PulseAudio".into(),
+        "JACK".into(),
+    ];
+    //
+
     env_logger::init();
     let app = App::new().unwrap();
     let app_clone = app.clone_strong();
     let app_clone2 = app.clone_strong();
     let app_clone3 = app.clone_strong();
+    let app_clone4 = app.clone_strong();
+    let app_clone5 = app.clone_strong();
+    let app_clone6 = app.clone_strong();
+    let app_clone7 = app.clone_strong();
     let app_weak = app.as_weak();
 
     let playback_id = Arc::new(Mutex::new(String::new()));
@@ -56,10 +89,17 @@ fn main() {
     let playback_id_clone2 = playback_id.clone();
     let playback_id_clone3 = playback_id.clone();
     let playback_id_clone4 = playback_id.clone();
-    let capture_devices = Audio::get_input_devices();
-    let playback_devices = Audio::get_output_devices();
 
-    
+    let default_backend = Audio::backend_from_text(backend_list[0].to_string());
+
+    let backend_arc = Arc::new(Mutex::new(backend_list[0].clone().to_string()));
+    let backend_arc2 = backend_arc.clone();
+    let backend_arc3 = backend_arc.clone();
+    let backend_arc4 = backend_arc.clone();
+
+    let capture_devices = Audio::get_input_devices(Some(default_backend));
+    let playback_devices = Audio::get_output_devices(Some(default_backend));
+
     let mut capture_devices_str = Vec::new();
     for device in capture_devices.iter() {
         capture_devices_str.push(slint::SharedString::from(device.0.clone()));
@@ -71,9 +111,11 @@ fn main() {
 
     let crc = Rc::new(slint::VecModel::from(capture_devices_str.clone()));
     let prc = Rc::new(slint::VecModel::from(playback_devices_str.clone()));
+    let cbrc = Rc::new(slint::VecModel::from(backend_list.clone()));
 
     app.global::<AudioDevices>().set_capture_devices(crc.into());
     app.global::<AudioDevices>().set_playback_devices(prc.into());
+    app.global::<AudioDevices>().set_backends(cbrc.into());
 
     *playback_id_clone.lock().unwrap() = playback_devices[0].0.clone();
 
@@ -81,8 +123,8 @@ fn main() {
     let capture_rx_arc = Arc::new(Mutex::new(capture_rx));
     let capture_rx_arc2 = capture_rx_arc.clone();
 
-    let capture_device: Arc<Mutex<AudioCapture>> = Arc::new(Mutex::new(AudioCapture::new(capture_devices[0].1.clone(), 
-    2, 48_000, 96_000, 0, capture_tx.clone())));
+    let capture_device: Arc<Mutex<AudioCapture>> = Arc::new(Mutex::new(AudioCapture::new(default_backend, capture_devices[0].1.clone(), 
+    1, 48_000, 96_000, 0, capture_tx.clone())));
     capture_device.lock().unwrap().start();
 
     let bind = capture_device.lock().unwrap().get_conn_addr();
@@ -101,8 +143,10 @@ fn main() {
         let threshold = app_clone.global::<AudioDevices>().get_input_threshold();
         println!("Capture device set to {}", capture_devices_str[id as usize].as_str());
         capture_device_clone.lock().unwrap().stop();
-        *capture_device_clone.lock().unwrap() = AudioCapture::new(capture_devices[id as usize].1.clone(), 
-        2, 48_000, 96_000, threshold, capture_tx.clone());
+        let backend_str = app_clone6.global::<AudioDevices>().get_capture_backend().to_string();
+        let backend = Audio::backend_from_text(backend_str);
+        *capture_device_clone.lock().unwrap() = AudioCapture::new(backend, capture_devices[id as usize].1.clone(), 
+        1, 48_000, 96_000, threshold, capture_tx.clone());
         capture_device_clone.lock().unwrap().start();
     });
 
@@ -133,12 +177,43 @@ fn main() {
         //playback_id_clone.store(idx, std::sync::atomic::Ordering::Relaxed);
     });
 
+    app.global::<AudioDevices>().on_set_capture_backend(move |backend|{
+        *backend_arc2.lock().unwrap() = backend.to_string();
+        let backend_obj = Audio::backend_from_text(backend.to_string());
+        let capture_devices = Audio::get_input_devices(Some(backend_obj));
+
+        let mut capture_devices_str = Vec::new();
+        for device in capture_devices.iter() {
+            capture_devices_str.push(slint::SharedString::from(device.0.clone()));
+        }
+
+        let vrc = Rc::new(slint::VecModel::from(capture_devices_str.clone()));
+        app_clone4.global::<AudioDevices>().set_capture_devices(vrc.into());
+        //backend_arc.store(backend.to_string(), std::sync::atomic::Ordering::Relaxed);
+    });
+
+    app.global::<AudioDevices>().on_set_playback_backend(move |backend|{
+        *backend_arc3.lock().unwrap() = backend.to_string();
+        let backend_obj = Audio::backend_from_text(backend.to_string());
+        let playback_devices = Audio::get_output_devices(Some(backend_obj));
+
+        let mut playback_devices_str = Vec::new();
+        for device in playback_devices.iter() {
+            playback_devices_str.push(slint::SharedString::from(device.0.clone()));
+        }
+
+        let vrc = Rc::new(slint::VecModel::from(playback_devices_str.clone()));
+        app_clone5.global::<AudioDevices>().set_playback_devices(vrc.into());
+        //backend_arc.store(backend.to_string(), std::sync::atomic::Ordering::Relaxed);
+    });
+
     //Network
     let cs_instance: Arc<Mutex<(Option<SignalingClient>,Option<SignalingServer>)>> = Arc::new(Mutex::new((None, None)));
     let cs_instance_clone = cs_instance.clone();
     let cs_instance_clone2 = cs_instance.clone();
 
     app.global::<Signaling>().on_create(move ||{
+        let backend = backend_arc.lock().unwrap().clone();
         let username = app_clone2.global::<SelfPeer>().get_name().to_string();
         
         let server = SignalingServer::new(username);
@@ -151,7 +226,7 @@ fn main() {
         thread::spawn(move ||{
             let t = cs_sinstance.lock().unwrap();
             let server = t.1.as_ref().unwrap(); 
-            server.run(playback_name);
+            server.run(backend, playback_name);
         });
         
         app_clone2.global::<Signaling>().set_address(slint::SharedString::from(listen));
@@ -185,6 +260,7 @@ fn main() {
     });
     //TODO: implement a socket to read from AudioCapture
     app.global::<Signaling>().on_connect(move |addr, key|{
+        let backend = backend_arc4.lock().unwrap().clone();
         let username = app_clone3.global::<SelfPeer>().get_name().to_string();
 
         let client = SignalingClient::new(username, addr.to_string(), key.to_string());
@@ -208,17 +284,23 @@ fn main() {
             let client_arc2 = client_arc.clone();
             let rx2 = rx.clone();
             thread::spawn(move ||{
-                client_arc2.run(playback_name);
+                client_arc2.run(backend, playback_name);
             });
             thread::spawn(move||{
                 let c_rx = rx2.lock().unwrap();
                 loop{
+                    //TODO: Implement some queue/buffer/idk
                     let packet = c_rx.recv();
                     if packet.is_err(){
                         continue;
                     }
-                    client_arc.send_opus(packet.unwrap());
-                    thread::sleep(std::time::Duration::from_millis(1));
+                    let p = packet.unwrap();
+                    let len = p.len();
+                    info!("Packet: {:#?}", p);
+                    info!("Packet len: {}", len);
+                    client_arc.send_opus(p);
+                    
+                    //client_arc.send_opus(packet.unwrap());
                 }
                 /*let socket = UdpSocket::bind(bind).unwrap();
         
