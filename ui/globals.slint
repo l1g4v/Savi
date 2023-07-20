@@ -5,7 +5,6 @@
 export struct Peer{
     id: int,
     name: string,
-    ip: string,
 }
 
 export global AudioDevices{
@@ -46,7 +45,5 @@ export global PeerList{
     callback mute-peer(int, bool);
 
     in property <[Peer]> peers: [
-        {id: 0, name: "Dummy", ip: "localhost" },
-        {id: 1, name: "Dummy2", ip: "127.0.0.1"},
     ];
 }

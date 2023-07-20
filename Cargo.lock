@@ -2831,6 +2831,7 @@ dependencies = [
  "bincode",
  "ebur128",
  "env_logger",
+ "flume",
  "futures-channel",
  "futures-util",
  "log",

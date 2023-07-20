@@ -31,16 +31,34 @@ use signaling::client::SignalingClient;
 use crate::audio::capture;
 
 struct PeerListData {
-    peers: Rc<slint::VecModel<Peer>>,
+    data: Rc<slint::VecModel<Peer>>,
 }
 
 impl PeerListData {
-    fn add_peer(&self, id: i32, name: slint::SharedString, adress: slint::SharedString) {
-        self.peers.push(Peer {
+    pub fn new() -> Self {
+        PeerListData {
+            data: Rc::new(slint::VecModel::default()),
+        }
+    }
+    pub fn add_peer(&self, id: i32, name: slint::SharedString) {
+        self.data.push(Peer {
             id: id,
             name: name,
-            ip: adress,
         })
+    }
+    pub fn set_data(&mut self, peers: Vec<Peer>) {
+        self.data = Rc::new(slint::VecModel::from(peers));
+    }
+
+    pub fn get_data (&self) -> Rc<slint::VecModel<Peer>> {
+        self.data.clone()
+    }
+
+    pub fn create_peer(id: u8, name: String) -> Peer {
+        Peer {
+            id: id as i32,
+            name: name.into(),
+        }
     }
 }
 
@@ -75,6 +93,7 @@ fn main() {
 
     env_logger::init();
     let app = App::new().unwrap();
+
     let app_clone = app.clone_strong();
     let app_clone2 = app.clone_strong();
     let app_clone3 = app.clone_strong();
@@ -82,7 +101,12 @@ fn main() {
     let app_clone5 = app.clone_strong();
     let app_clone6 = app.clone_strong();
     let app_clone7 = app.clone_strong();
+
     let app_weak = app.as_weak();
+    let app_weak2 = app.as_weak();
+    let app_weak3 = app.as_weak();
+
+
 
     let playback_id = Arc::new(Mutex::new(String::new()));
     let playback_id_clone = playback_id.clone();
@@ -124,6 +148,10 @@ fn main() {
     let (capture_tx, capture_rx) = mpsc::channel::<Vec<u8>>();
     let capture_rx_arc = Arc::new(Mutex::new(capture_rx));
     let capture_rx_arc2 = capture_rx_arc.clone();
+
+    let (peercontrol_tx, peercontrol_rx) = mpsc::channel::<(u8,u8)>();
+    let peercontrol_rx_arc = Arc::new(Mutex::new(peercontrol_rx));
+    let peercontrol_rx_arc2 = peercontrol_rx_arc.clone();
 
     let capture_device: Arc<Mutex<AudioCapture>> = Arc::new(Mutex::new(AudioCapture::new(default_backend, capture_devices[0].1.clone(), 
     1, 48_000, 96_000, 0, capture_tx.clone())));
@@ -209,6 +237,10 @@ fn main() {
         //backend_arc.store(backend.to_string(), std::sync::atomic::Ordering::Relaxed);
     });
 
+    app.global::<PeerList>().on_change_volume(move |id, volume|{
+        peercontrol_tx.send((id as u8, volume as u8)).unwrap();
+    });
+
     //Network
     let cs_instance: Arc<Mutex<(Option<SignalingClient>,Option<SignalingServer>)>> = Arc::new(Mutex::new((None, None)));
     let cs_instance_clone = cs_instance.clone();
@@ -229,10 +261,18 @@ fn main() {
         let playback_name = playback_id_clone3.lock().unwrap().clone();
 
         let rx = capture_rx_arc.clone();
+        let peer_rx = peercontrol_rx_arc.clone();
+
+        let app_weak = app_weak2.clone();
         thread::spawn(move ||{
+            let app_weak = app_weak.clone();
+
             let server_arc = Arc::new(server);
             let server_arc2 = server_arc.clone();
+            let server_arc3 = server_arc.clone();
+            let server_arc4 = server_arc.clone();
             let rx2 = rx.clone();
+            let peer_rx2 = peer_rx.clone();
             thread::spawn(move ||{
                 server_arc2.run(backend, playback_name);
             });
@@ -246,6 +286,46 @@ fn main() {
                     }
                     let p = packet.unwrap();
                     server_arc.send_opus(p);
+                }
+            });
+            thread::spawn(move ||{
+                let c_rx = peer_rx2.lock().unwrap();
+                loop{
+                    let packet = c_rx.recv();
+                    if packet.is_err(){
+                        continue;
+                    }
+                    let (id, volume) = packet.unwrap();
+                    server_arc3.change_peer_volume(id, volume);
+                }
+            });
+            thread::spawn(move ||{
+                let app_weak = app_weak.clone();
+                let mut n_peers = 0;
+                loop{
+                    let app = app_weak.clone();
+                    let peers = server_arc4.get_peers();
+                    info!("Peers: {:#?}", peers);
+                    if peers.len() != n_peers{
+                        n_peers = peers.len();
+                        let res = slint::invoke_from_event_loop(move ||{
+                            let mut peer_data = PeerListData::new();
+                            let mut peers_vec = Vec::new();
+                            for peer in peers.iter() {
+                                let data = peer.clone();
+                                let peer_slint = PeerListData::create_peer(data.0, data.1);
+                                peers_vec.push(peer_slint);
+                            }
+                            peer_data.set_data(peers_vec);
+                            app.unwrap().global::<PeerList>().set_peers(peer_data.get_data().clone().into());
+                        });      
+                        if res.is_err(){
+                            error!("Error updating peers: {:?}", res.err().unwrap());
+                        }  
+                        //app_weak2.unwrap().global::<PeerList>().set_peers(peer_data.get_data().into());
+                        //app_clone2.global::<PeerList>().set_peers(peer_data.get_data().into());
+                    }
+                    thread::sleep(std::time::Duration::from_millis(100));
                 }
             });
         });
@@ -272,10 +352,13 @@ fn main() {
         info!("Connect: {}", connect);
         //let cs_cinstance2 = cs_instance_clone2.clone();
         let rx = capture_rx_arc2.clone();
+        let peer_rx = peercontrol_rx_arc2.clone();
         thread::spawn(move ||{
             let client_arc = Arc::new(client);
             let client_arc2 = client_arc.clone();
+            let client_arc3 = client_arc.clone();
             let rx2 = rx.clone();
+            let peer_rx2 = peer_rx.clone();
             thread::spawn(move ||{
                 client_arc2.run(backend, playback_name);
             });
@@ -291,8 +374,20 @@ fn main() {
                     client_arc.send_opus(p);
                 }
             });
+            thread::spawn(move ||{
+                let c_rx = peer_rx2.lock().unwrap();
+                loop{
+                    let packet = c_rx.recv();
+                    if packet.is_err(){
+                        continue;
+                    }
+                    let (id, volume) = packet.unwrap();
+                    client_arc3.change_peer_volume(id, volume);
+                }
+            });
         });
     });
+
 
     app.run().unwrap();
     

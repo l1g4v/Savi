@@ -208,7 +208,22 @@ impl SignalingServer {
             peer.send(opus_packet.clone());
         }
     }
-    pub fn get_peers(&self){
-        
+    pub fn get_peers(&self) -> Vec<(u8, String)> {
+        let peers = self.audio_peers.lock().unwrap();
+        let mut result: Vec<(u8,String)> = Vec::new();
+        peers.iter().for_each(|(id, (username, _, _))| {
+            result.push((*id, username.clone()));
+        });
+        result
+    }
+    pub fn change_peer_volume(&self, peer_id: u8, volume: u8){
+        let peers = self.audio_peers.lock().unwrap();
+        let peer = peers.get(&peer_id);
+        if peer.is_none(){
+            error!("Peer {} not found", peer_id);
+            return;
+        }
+        let (_, _, peer) = peer.unwrap();
+        peer.change_volume(volume);
     }
 }
